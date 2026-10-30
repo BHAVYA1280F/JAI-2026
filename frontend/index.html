@@ -1,0 +1,667 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>DermaGuard: image quality check</title>
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #0d1117;
+  --subtle: #161b22;
+  --inset: #010409;
+  --border: #30363d;
+  --border-muted: #21262d;
+  --fg: #e6edf3;
+  --muted: #7d8590;
+  --accent: #2f81f7;
+  --success: #3fb950;
+  --success-bg: rgba(46,160,67,.15);
+  --success-btn: #238636;
+  --danger: #f85149;
+  --danger-bg: rgba(248,81,73,.12);
+  --attention: #d29922;
+  --attention-bg: rgba(187,128,9,.15);
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 var(--sans); }
+.hidden { display: none !important; }
+.muted { color: var(--muted); }
+.mono { font-family: var(--mono); font-size: 12px; }
+button { font: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* header */
+.top { background: var(--subtle); border-bottom: 1px solid var(--border); }
+.top-in { max-width: 1200px; margin: 0 auto; padding: 0 20px; display: flex; align-items: center; gap: 24px; height: 56px; }
+.brand { display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 600; }
+.brand svg { color: var(--success); }
+.nav { display: flex; gap: 4px; height: 100%; }
+.nav button { background: none; border: 0; border-bottom: 2px solid transparent; color: var(--muted); padding: 0 12px; cursor: pointer; }
+.nav button:hover { color: var(--fg); }
+.nav button[aria-selected="true"] { color: var(--fg); border-bottom-color: #f78166; font-weight: 600; }
+.api { margin-left: auto; display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); background: none; border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px; cursor: pointer; }
+.api i { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.api.on i { background: var(--success); }
+.api.off i { background: var(--danger); }
+
+/* layout */
+main { max-width: 1200px; margin: 0 auto; padding: 24px 20px 64px; }
+h1 { font-size: 24px; font-weight: 600; margin: 0 0 4px; }
+.lead { margin: 0 0 24px; color: var(--muted); max-width: 70ch; }
+.grid { display: grid; gap: 24px; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); align-items: start; }
+@media (max-width: 920px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+.box { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.box-h { background: var(--subtle); border-bottom: 1px solid var(--border); padding: 0 16px; display: flex; align-items: center; gap: 12px; min-height: 44px; font-weight: 600; }
+.box-b { padding: 16px; }
+.tabs { display: flex; gap: 4px; padding: 0 8px; background: var(--subtle); border-bottom: 1px solid var(--border); }
+.tabs button { display: flex; align-items: center; gap: 8px; background: none; border: 0; border-bottom: 2px solid transparent; color: var(--muted); padding: 12px 10px 10px; cursor: pointer; }
+.tabs button:hover { color: var(--fg); }
+.tabs button[aria-selected="true"] { color: var(--fg); border-bottom-color: #f78166; font-weight: 600; }
+
+/* buttons */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 5px 16px; border-radius: 6px; border: 1px solid rgba(240,246,252,.1); background: #21262d; color: var(--fg); cursor: pointer; font-weight: 500; }
+.btn:hover:not(:disabled) { background: #30363d; border-color: #8b949e; }
+.btn.primary { background: var(--success-btn); border-color: rgba(240,246,252,.1); color: #fff; }
+.btn.primary:hover:not(:disabled) { background: #2ea043; }
+.btn.danger { color: var(--danger); }
+.btn:disabled { opacity: .55; cursor: not-allowed; }
+.btn.block { width: 100%; padding: 8px 16px; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* upload */
+.drop { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; min-height: 260px; border: 1px dashed var(--border); border-radius: 6px; background: var(--inset); padding: 24px; cursor: pointer; }
+.drop:hover, .drop.over { border-color: var(--accent); background: rgba(47,129,247,.06); }
+.drop svg { color: var(--muted); }
+.drop strong { font-size: 16px; }
+.preview { position: relative; background: var(--inset); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.preview img, .preview video { display: block; width: 100%; max-height: 420px; object-fit: contain; background: #000; }
+.fname { margin: 8px 0 12px; word-break: break-all; }
+
+/* webcam */
+.cam { position: relative; background: #000; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; aspect-ratio: 4 / 3; display: flex; align-items: center; justify-content: center; }
+.cam video, .cam img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.cam .guide { position: absolute; left: 50%; top: 50%; width: 56%; aspect-ratio: 1; transform: translate(-50%, -50%); border: 2px dashed rgba(230,237,243,.55); border-radius: 12px; pointer-events: none; }
+.cam .idle { position: relative; text-align: center; padding: 24px; color: var(--muted); max-width: 36ch; }
+.live { margin-top: 12px; }
+.live-h { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.live-score { font-size: 20px; font-weight: 600; }
+.pills { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 1px 10px; border-radius: 999px; border: 1px solid var(--border); }
+.pill.ok { color: var(--success); border-color: rgba(46,160,67,.5); background: var(--success-bg); }
+.pill.bad { color: var(--danger); border-color: rgba(248,81,73,.5); background: var(--danger-bg); }
+.hint { min-height: 42px; color: var(--fg); }
+.msg { margin-top: 12px; }
+
+/* callouts */
+.callout { border-left: 4px solid var(--border); background: var(--subtle); border-radius: 0 6px 6px 0; padding: 8px 16px; display: flex; gap: 10px; }
+.callout + .callout { margin-top: 8px; }
+.callout .ico { margin-top: 2px; flex: none; }
+.callout p { margin: 0; }
+.callout .t { font-weight: 600; }
+.callout.caution { border-left-color: var(--danger); } .callout.caution .ico { color: var(--danger); }
+.callout.warning { border-left-color: var(--attention); } .callout.warning .ico { color: var(--attention); }
+.callout.note { border-left-color: var(--success); } .callout.note .ico { color: var(--success); }
+.callout.info { border-left-color: var(--accent); } .callout.info .ico { color: var(--accent); }
+
+/* result: merge-box verdict */
+.verdict { display: flex; align-items: center; gap: 16px; padding: 16px; border-bottom: 1px solid var(--border); }
+.verdict .big { flex: none; }
+.verdict.ok .big { color: var(--success); } .verdict.bad .big { color: var(--danger); }
+.verdict h2 { margin: 0; font-size: 20px; font-weight: 600; }
+.verdict p { margin: 2px 0 0; color: var(--muted); }
+.verdict .txt { flex: 1; min-width: 0; }
+.scorering { position: relative; width: 88px; height: 88px; flex: none; }
+.scorering .n { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1; }
+.scorering .n b { font-size: 24px; }
+.scorering .n span { font-size: 11px; color: var(--muted); }
+.grade { text-align: center; margin-top: 2px; font-size: 12px; color: var(--muted); }
+.checks { list-style: none; margin: 0; padding: 0; }
+.check { display: flex; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border-muted); }
+.check:last-child { border-bottom: 0; }
+.check .ico { flex: none; margin-top: 2px; }
+.ico.success { color: var(--success); } .ico.danger { color: var(--danger); }
+.check-main { flex: 1; min-width: 0; }
+.check-title { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; }
+.check-reason { margin-top: 2px; }
+.check-score { flex: none; width: 96px; text-align: right; }
+.check-score .num { font-weight: 600; font-variant-numeric: tabular-nums; }
+.bar { height: 6px; border-radius: 3px; background: var(--border-muted); margin-top: 6px; overflow: hidden; }
+.bar i { display: block; height: 100%; border-radius: 3px; }
+.bar.success i { background: var(--success); } .bar.danger i { background: var(--danger); }
+@media (prefers-reduced-motion: no-preference) { .bar i { transition: width .35s ease; } }
+.sect { padding: 16px; border-top: 1px solid var(--border); }
+.sect h3 { margin: 0 0 8px; font-size: 14px; font-weight: 600; }
+.next { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+pre { margin: 8px 0 0; padding: 12px; background: var(--inset); border: 1px solid var(--border); border-radius: 6px; overflow: auto; max-height: 320px; font: 12px/1.45 var(--mono); }
+details summary { cursor: pointer; font-weight: 600; }
+.empty { text-align: center; padding: 56px 24px; color: var(--muted); }
+.empty svg { margin-bottom: 8px; }
+.spin { width: 28px; height: 28px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; margin: 0 auto 12px; }
+@media (prefers-reduced-motion: no-preference) { .spin { animation: sp .8s linear infinite; } }
+@keyframes sp { to { transform: rotate(360deg); } }
+
+/* performance view */
+.stats { width: 100%; border-collapse: collapse; }
+.stats th, .stats td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border-muted); }
+.stats th { color: var(--muted); font-weight: 500; }
+.stats td.num { font-variant-numeric: tabular-nums; }
+.stats .after { font-weight: 600; }
+.cm { border-collapse: collapse; margin-top: 8px; }
+.cm td, .cm th { border: 1px solid var(--border); padding: 10px 14px; text-align: center; }
+.cm th { background: var(--subtle); font-weight: 500; color: var(--muted); }
+.cm td.good { background: var(--success-bg); } .cm td.badc { background: var(--danger-bg); }
+.cm td b { display: block; font-size: 20px; }
+.hbar { display: grid; grid-template-columns: 90px 1fr 56px; gap: 10px; align-items: center; margin: 6px 0; }
+.perf-grid { display: grid; gap: 24px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 24px; }
+@media (max-width: 920px) { .perf-grid { grid-template-columns: minmax(0, 1fr); } }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="top-in">
+    <div class="brand">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.5 4.5 5.5v6c0 4.6 3.1 8.3 7.5 10 4.4-1.7 7.5-5.4 7.5-10v-6L12 2.5Z"/><path d="m8.6 12.2 2.4 2.4 4.4-4.6"/></svg>
+      DermaGuard
+    </div>
+    <nav class="nav" role="tablist" aria-label="Pages">
+      <button role="tab" id="nav-check" aria-selected="true">Check an image</button>
+      <button role="tab" id="nav-perf" aria-selected="false">Model performance</button>
+    </nav>
+    <button class="api" id="api" title="Click to re-check the connection"><i></i><span id="api-t">Checking API</span></button>
+  </div>
+</header>
+
+<main>
+  <!-- PAGE 1 -->
+  <section id="page-check">
+    <h1>Image quality check</h1>
+    <p class="lead">Model 1 decides whether a skin-lesion photo is clear enough for analysis. It checks sharpness, lighting, glare, hair or obstructions, resolution and framing. It does not diagnose anything.</p>
+
+    <div class="grid">
+      <div class="box">
+        <div class="tabs" role="tablist" aria-label="Image source">
+          <button role="tab" id="tab-upload" aria-selected="true">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2.75 14A1.75 1.75 0 0 1 1 12.25v-2.5a.75.75 0 0 1 1.5 0v2.5c0 .138.112.25.25.25h10.5a.25.25 0 0 0 .25-.25v-2.5a.75.75 0 0 1 1.5 0v2.5A1.75 1.75 0 0 1 13.25 14Z"/><path d="M11.78 4.72a.749.749 0 1 1-1.06 1.06L8.75 3.811V9.5a.75.75 0 0 1-1.5 0V3.811L5.28 5.78a.749.749 0 1 1-1.06-1.06l3.25-3.25a.749.749 0 0 1 1.06 0l3.25 3.25Z"/></svg>
+            Upload
+          </button>
+          <button role="tab" id="tab-webcam" aria-selected="false">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M5.5 3 6.4 1.5h3.2L10.5 3H13a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm2.5 2.2a3.3 3.3 0 1 0 0 6.6 3.3 3.3 0 0 0 0-6.6Zm0 1.5a1.8 1.8 0 1 1 0 3.6 1.8 1.8 0 0 1 0-3.6Z"/></svg>
+            Webcam
+          </button>
+        </div>
+
+        <div class="box-b" id="pane-upload">
+          <label class="drop" id="drop" tabindex="0" for="file">
+            <svg width="40" height="40" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2.75 14A1.75 1.75 0 0 1 1 12.25v-2.5a.75.75 0 0 1 1.5 0v2.5c0 .138.112.25.25.25h10.5a.25.25 0 0 0 .25-.25v-2.5a.75.75 0 0 1 1.5 0v2.5A1.75 1.75 0 0 1 13.25 14Z"/><path d="M11.78 4.72a.749.749 0 1 1-1.06 1.06L8.75 3.811V9.5a.75.75 0 0 1-1.5 0V3.811L5.28 5.78a.749.749 0 1 1-1.06-1.06l3.25-3.25a.749.749 0 0 1 1.06 0l3.25 3.25Z"/></svg>
+            <strong>Drop a photo here</strong>
+            <span class="muted">or click to choose a JPG, PNG or BMP file (up to 15 MB)</span>
+          </label>
+          <input type="file" id="file" accept="image/jpeg,image/png,image/bmp,image/*" class="hidden">
+          <div id="picked" class="hidden">
+            <div class="preview"><img id="picked-img" alt="Selected image preview"></div>
+            <p class="fname muted mono" id="picked-name"></p>
+            <button class="btn" id="choose-other">Choose another image</button>
+          </div>
+        </div>
+
+        <div class="box-b hidden" id="pane-webcam">
+          <div class="cam" id="cam">
+            <div class="idle" id="cam-idle">Start the camera, then hold the lesion inside the dashed frame. Capture unlocks after 5 good frames in a row.</div>
+            <video id="video" class="hidden" playsinline muted></video>
+            <img id="snap" class="hidden" alt="Captured frame">
+            <div class="guide hidden" id="guide"></div>
+          </div>
+          <div class="live hidden" id="live">
+            <div class="live-h"><span class="live-score" id="live-score">–</span><span class="muted">live quality score</span></div>
+            <div class="pills" id="pills"></div>
+            <div class="hint" id="hint"></div>
+          </div>
+          <div class="row" style="margin-top:12px">
+            <button class="btn primary" id="cam-start">Start camera</button>
+            <button class="btn primary hidden" id="cam-capture" disabled>Capture image</button>
+            <button class="btn hidden" id="cam-retake">Retake</button>
+            <button class="btn danger hidden" id="cam-stop">Stop camera</button>
+          </div>
+          <div class="msg hidden" id="cam-msg"></div>
+        </div>
+      </div>
+
+      <div class="box" aria-live="polite">
+        <div class="box-h">Result</div>
+        <div id="result"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PAGE 2 -->
+  <section id="page-perf" class="hidden">
+    <h1>Model performance</h1>
+    <p class="lead">How well the quality gate separates good images from bad ones, measured on your dataset. A bad image counts as the positive class, so sensitivity is the share of bad images that were rejected.</p>
+    <div id="perf"></div>
+  </section>
+</main>
+
+<script>
+'use strict';
+const API = location.protocol === 'file:'
+  ? 'http://localhost:8000'
+  : (new URLSearchParams(location.search).get('api') || '');
+const REQUIRED = 5;
+const CHECKS = [
+  { key: 'clarity',      label: 'Clarity',      weight: 30 },
+  { key: 'illumination', label: 'Lighting',     weight: 20 },
+  { key: 'glare',        label: 'Glare',        weight: 15 },
+  { key: 'obstruction',  label: 'Obstruction',  weight: 15 },
+  { key: 'resolution',   label: 'Resolution',   weight: 10 },
+  { key: 'framing',      label: 'Framing',      weight: 10 },
+];
+const LABEL = Object.fromEntries(CHECKS.map(c => [c.key, c.label]));
+const $ = id => document.getElementById(id);
+
+/* ---------- tiny DOM helper (text is always set as text, never as HTML) ---------- */
+function h(tag, attrs, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v == null || v === false) continue;
+    if (k === 'class') el.className = v;
+    else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
+    else el.setAttribute(k, v === true ? '' : v);
+  }
+  for (const kid of kids.flat()) {
+    if (kid == null || kid === false) continue;
+    el.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
+  }
+  return el;
+}
+const ICONS = {
+  check: '<path d="M8 16A8 8 0 1 1 8 0a8 8 0 0 1 0 16Zm3.78-9.72a.751.751 0 0 0-.018-1.042.751.751 0 0 0-1.042-.018L6.75 9.19 5.28 7.72a.751.751 0 0 0-1.042.018.751.751 0 0 0-.018 1.042l2 2a.75.75 0 0 0 1.06 0Z"/>',
+  x: '<path d="M2.343 13.657A8 8 0 1 1 13.658 2.343 8 8 0 0 1 2.343 13.657ZM6.03 4.97a.751.751 0 0 0-1.042.018.751.751 0 0 0-.018 1.042L6.94 8 4.97 9.97a.749.749 0 0 0 .326 1.275.749.749 0 0 0 .734-.215L8 9.06l1.97 1.97a.749.749 0 0 0 1.275-.326.749.749 0 0 0-.215-.734L9.06 8l1.97-1.97a.749.749 0 0 0-.326-1.275.749.749 0 0 0-.734.215L8 6.94Z"/>',
+  alert: '<path d="M6.457 1.047c.659-1.234 2.427-1.234 3.086 0l6.082 11.378A1.75 1.75 0 0 1 14.082 15H1.918a1.75 1.75 0 0 1-1.543-2.575Zm1.763.707a.25.25 0 0 0-.44 0L1.698 13.132a.25.25 0 0 0 .22.368h12.164a.25.25 0 0 0 .22-.368Zm.53 3.996v2.5a.75.75 0 0 1-1.5 0v-2.5a.75.75 0 0 1 1.5 0ZM9 11a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z"/>',
+  info: '<path d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm8-6.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM6.5 7.75A.75.75 0 0 1 7.25 7h1a.75.75 0 0 1 .75.75v2.75h.25a.75.75 0 0 1 0 1.5h-2a.75.75 0 0 1 0-1.5h.25v-2h-.25a.75.75 0 0 1-.75-.75ZM8 6a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z"/>',
+  image: '<path d="M16 13.25A1.75 1.75 0 0 1 14.25 15H1.75A1.75 1.75 0 0 1 0 13.25V2.75C0 1.784.784 1 1.75 1h12.5c.966 0 1.75.784 1.75 1.75ZM1.75 2.5a.25.25 0 0 0-.25.25v10.5c0 .138.112.25.25.25h.94l6.19-6.19a.75.75 0 0 1 1.06 0l4.56 4.56V2.75a.25.25 0 0 0-.25-.25ZM5 7.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Z"/>',
+};
+function icon(name, size = 16) {
+  const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  s.setAttribute('viewBox', '0 0 16 16'); s.setAttribute('width', size); s.setAttribute('height', size);
+  s.setAttribute('fill', 'currentColor'); s.setAttribute('aria-hidden', 'true');
+  s.innerHTML = ICONS[name];            // static strings only
+  return s;
+}
+const pct = (v, d = 1) => v == null ? '–' : (v * 100).toFixed(d) + '%';
+
+/* ---------- API ---------- */
+async function postFile(path, blob, filename) {
+  const fd = new FormData();
+  fd.append('file', blob, filename || 'image.jpg');
+  let res;
+  try { res = await fetch(API + path, { method: 'POST', body: fd }); }
+  catch (e) {
+    setApi(false);
+    throw new Error("Can't reach the Model 1 API. Start it from the dermaguard folder with: uvicorn backend.main:app --reload");
+  }
+  if (!res.ok) {
+    let detail = res.statusText;
+    try { detail = (await res.json()).detail || detail; } catch (_) {}
+    throw new Error(detail);
+  }
+  setApi(true);
+  return res.json();
+}
+function setApi(on) {
+  $('api').className = 'api ' + (on ? 'on' : 'off');
+  $('api-t').textContent = on ? 'API connected' : 'API offline';
+}
+async function pingApi() {
+  try { const r = await fetch(API + '/openapi.json'); setApi(r.ok); } catch (_) { setApi(false); }
+}
+$('api').addEventListener('click', pingApi);
+window.addEventListener('focus', pingApi);
+
+/* ---------- navigation ---------- */
+function showPage(name) {
+  const check = name === 'check';
+  $('page-check').classList.toggle('hidden', !check);
+  $('page-perf').classList.toggle('hidden', check);
+  $('nav-check').setAttribute('aria-selected', check);
+  $('nav-perf').setAttribute('aria-selected', !check);
+  if (!check) { stopCam(); loadPerf(); }
+}
+$('nav-check').onclick = () => showPage('check');
+$('nav-perf').onclick = () => showPage('perf');
+
+function showMode(mode) {
+  const up = mode === 'upload';
+  $('pane-upload').classList.toggle('hidden', !up);
+  $('pane-webcam').classList.toggle('hidden', up);
+  $('tab-upload').setAttribute('aria-selected', up);
+  $('tab-webcam').setAttribute('aria-selected', !up);
+  if (up) stopCam();
+}
+$('tab-upload').onclick = () => showMode('upload');
+$('tab-webcam').onclick = () => showMode('webcam');
+
+/* ---------- result panel ---------- */
+function resultEmpty() {
+  $('result').replaceChildren(h('div', { class: 'empty' }, icon('image', 32),
+    h('div', {}, 'No result yet. Upload a photo or use the webcam to run the quality check.')));
+}
+function resultLoading() {
+  $('result').replaceChildren(h('div', { class: 'empty' }, h('div', { class: 'spin' }), h('div', {}, 'Checking image quality')));
+}
+function resultError(msg) {
+  $('result').replaceChildren(h('div', { class: 'sect', style: 'border-top:0' },
+    h('div', { class: 'callout caution' }, h('span', { class: 'ico' }, icon('alert')),
+      h('div', {}, h('p', { class: 't' }, 'Could not check this image'), h('p', {}, msg)))));
+}
+resultEmpty();
+
+function metricText(key, m) {
+  switch (key) {
+    case 'clarity': return `Laplacian variance ${Math.round(m.laplacian_var)}`;
+    case 'illumination': return `Mean brightness ${Math.round(m.mean_gray)} of 255`;
+    case 'glare': return `${pct(m.glare_fraction)} of the image is glare`;
+    case 'obstruction': return `${pct(m.hair_fraction)} of the image is thin dark lines`;
+    case 'resolution': return `${m.width} x ${m.height} px`;
+    case 'framing': return m.lesion_area ? `Lesion covers ${pct(m.lesion_area, 0)} of the frame` : 'No lesion found';
+    default: return '';
+  }
+}
+function scoreRing(score) {
+  const r = 34, c = 2 * Math.PI * r;
+  const col = score >= 80 ? 'var(--success)' : score >= 60 ? 'var(--attention)' : 'var(--danger)';
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('viewBox', '0 0 80 80'); svg.setAttribute('width', 88); svg.setAttribute('height', 88);
+  const mk = (stroke, dash) => {
+    const el = document.createElementNS(ns, 'circle');
+    for (const [k, v] of Object.entries({ cx: 40, cy: 40, r, fill: 'none', stroke, 'stroke-width': 6, 'stroke-linecap': 'round' })) el.setAttribute(k, v);
+    if (dash) { el.setAttribute('stroke-dasharray', dash); el.setAttribute('transform', 'rotate(-90 40 40)'); }
+    return el;
+  };
+  svg.append(mk('#30363d'), mk(col, `${(Math.max(0, Math.min(100, score)) / 100 * c).toFixed(1)} ${c.toFixed(1)}`));
+  return h('div', { class: 'scorering', role: 'img', 'aria-label': `Overall quality score ${Math.round(score)} out of 100` },
+    svg, h('div', { class: 'n' }, h('b', {}, Math.round(score)), h('span', {}, 'of 100')));
+}
+function checkRow(def, c) {
+  const tone = c.passed ? 'success' : 'danger';
+  return h('li', { class: 'check' },
+    h('span', { class: 'ico ' + tone }, icon(c.passed ? 'check' : 'x')),
+    h('div', { class: 'check-main' },
+      h('div', { class: 'check-title' }, h('strong', {}, def.label), h('span', { class: 'muted' }, `${def.weight}% of the score`)),
+      h('div', { class: 'check-reason' }, c.reason),
+      h('div', { class: 'muted mono' }, metricText(def.key, c.metrics))),
+    h('div', { class: 'check-score' },
+      h('span', { class: 'num' }, Math.round(c.score), h('span', { class: 'muted' }, ' / 100')),
+      h('div', { class: 'bar ' + tone }, h('i', { style: `width:${c.score}%` }))));
+}
+function recCallout(r) {
+  const kind = r.severity === 'MUST_FIX' ? 'caution' : r.severity === 'SUGGESTED' ? 'warning' : 'note';
+  const ic = kind === 'note' ? 'check' : 'alert';
+  const title = r.severity === 'INFO' ? 'No changes needed' : (LABEL[r.check] || 'Image') + (r.severity === 'MUST_FIX' ? ': fix before retrying' : ': could be better');
+  return h('div', { class: 'callout ' + kind }, h('span', { class: 'ico' }, icon(ic)),
+    h('div', {}, h('p', { class: 't' }, title),
+      r.severity !== 'INFO' && r.problem ? h('p', { class: 'muted' }, r.problem) : null,
+      h('p', {}, r.action)));
+}
+
+function renderReport(rep, blob) {
+  const d = rep.decision, qa = rep.quality_analysis || {};
+  const failed = CHECKS.filter(c => qa[c.key] && !qa[c.key].passed).length;
+  const ok = d.approved;
+
+  const verdict = h('div', { class: 'verdict ' + (ok ? 'ok' : 'bad') },
+    h('span', { class: 'big' }, icon(ok ? 'check' : 'x', 36)),
+    h('div', { class: 'txt' },
+      h('h2', {}, ok ? 'Image approved' : 'Image rejected'),
+      h('p', {}, ok ? 'All checks passed. This image can go to Model 2.'
+                    : (failed ? `${failed} of ${CHECKS.length} checks failed. ` : '') + d.reasons.join('. ')),
+      !ok && rep.overall_quality_score >= 80
+        ? h('p', {}, 'The overall score is high, but one failed check is enough to reject an image.') : null),
+    h('div', {}, scoreRing(rep.overall_quality_score), h('div', { class: 'grade' }, (rep.quality_grade || '').replace('_', ' ').toLowerCase())));
+
+  const list = h('ul', { class: 'checks' }, CHECKS.filter(c => qa[c.key]).map(c => checkRow(c, qa[c.key])));
+
+  const recs = h('div', { class: 'sect' }, h('h3', {}, 'Recommendations'), (rep.recommendations || []).map(recCallout));
+
+  const diag = h('div', { id: 'diag' });
+  const nextBtn = ok && blob
+    ? h('button', { class: 'btn primary', onclick: e => runPredict(e.currentTarget, blob, diag) }, 'Run Model 2 diagnosis')
+    : h('span', { class: 'muted' }, ok ? '' : 'Retake the photo using the recommendations above.');
+  const next = h('div', { class: 'sect' },
+    h('div', { class: 'next' },
+      h('div', {}, h('h3', { style: 'margin:0' }, 'Next step'),
+        h('span', { class: 'muted' }, ok ? 'Send to Model 2' : 'Request a new image')),
+      nextBtn),
+    diag);
+
+  const json = JSON.stringify(rep, null, 2);
+  const raw = h('div', { class: 'sect' },
+    h('details', {}, h('summary', {}, 'Raw JSON report'),
+      h('div', { class: 'row', style: 'margin-top:8px' },
+        h('button', { class: 'btn', onclick: e => { navigator.clipboard.writeText(json); e.currentTarget.textContent = 'Copied'; } }, 'Copy JSON')),
+      h('pre', {}, json)));
+
+  $('result').replaceChildren(verdict, list, recs, next, raw);
+}
+
+async function runPredict(btn, blob, out) {
+  btn.disabled = true; btn.textContent = 'Running';
+  out.replaceChildren();
+  try {
+    const r = await postFile('/predict', blob, 'image.jpg');
+    let node;
+    if (r.status === 'REJECTED') {
+      node = h('div', { class: 'callout caution' }, h('span', { class: 'ico' }, icon('alert')),
+        h('div', {}, h('p', { class: 't' }, 'Rejected on the server'), h('p', {}, (r.quality_report.decision.reasons || []).join('. '))));
+    } else if (r.diagnosis == null) {
+      node = h('div', { class: 'callout info' }, h('span', { class: 'ico' }, icon('info')),
+        h('div', {}, h('p', { class: 't' }, 'Quality gate passed on the server'),
+          h('p', {}, "Model 2 isn't connected yet, so there is no diagnosis to show.")));
+    } else {
+      node = h('pre', {}, JSON.stringify(r.diagnosis, null, 2));
+    }
+    out.append(h('div', { style: 'margin-top:12px' }, node));
+  } catch (e) {
+    out.append(h('div', { style: 'margin-top:12px' }, h('div', { class: 'callout caution' }, h('span', { class: 'ico' }, icon('alert')), h('div', {}, h('p', {}, e.message)))));
+  }
+  btn.disabled = false; btn.textContent = 'Run Model 2 diagnosis';
+}
+
+async function analyze(blob, name) {
+  resultLoading();
+  try { renderReport(await postFile('/quality/analyze', blob, name), blob); }
+  catch (e) { resultError(e.message); }
+}
+
+/* ---------- upload ---------- */
+let previewUrl = null;
+function pickFile(file) {
+  if (!file) return;
+  if (!file.type.startsWith('image/')) { resultError('That file is not an image. Choose a JPG, PNG or BMP file.'); return; }
+  if (file.size > 15 * 1024 * 1024) { resultError('That image is larger than 15 MB. Choose a smaller file.'); return; }
+  if (previewUrl) URL.revokeObjectURL(previewUrl);
+  previewUrl = URL.createObjectURL(file);
+  $('picked-img').src = previewUrl;
+  $('picked-name').textContent = `${file.name} (${(file.size / 1024).toFixed(0)} KB)`;
+  $('drop').classList.add('hidden'); $('picked').classList.remove('hidden');
+  analyze(file, file.name);
+}
+$('file').addEventListener('change', e => { pickFile(e.target.files[0]); e.target.value = ''; });
+$('choose-other').onclick = () => {
+  $('picked').classList.add('hidden'); $('drop').classList.remove('hidden'); resultEmpty();
+};
+$('drop').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('file').click(); } });
+['dragenter', 'dragover'].forEach(t => $('drop').addEventListener(t, e => { e.preventDefault(); $('drop').classList.add('over'); }));
+['dragleave', 'drop'].forEach(t => $('drop').addEventListener(t, e => { e.preventDefault(); $('drop').classList.remove('over'); }));
+$('drop').addEventListener('drop', e => pickFile(e.dataTransfer.files[0]));
+
+/* ---------- webcam ---------- */
+let stream = null, liveOn = false, busy = false, streak = 0;
+const video = $('video');
+const camMsg = (t, kind = 'warning') => {
+  const box = $('cam-msg');
+  if (!t) { box.classList.add('hidden'); return; }
+  box.classList.remove('hidden');
+  box.replaceChildren(h('div', { class: 'callout ' + kind }, h('span', { class: 'ico' }, icon('alert')), h('div', {}, h('p', {}, t))));
+};
+function camUi(state) {      // 'off' | 'live' | 'frozen'
+  const on = state !== 'off', frozen = state === 'frozen';
+  video.classList.toggle('hidden', !on);
+  $('guide').classList.toggle('hidden', !on || frozen);
+  $('snap').classList.toggle('hidden', !frozen);
+  $('cam-idle').classList.toggle('hidden', on);
+  $('live').classList.toggle('hidden', !on || frozen);
+  $('cam-start').classList.toggle('hidden', on);
+  $('cam-capture').classList.toggle('hidden', !on || frozen);
+  $('cam-retake').classList.toggle('hidden', !frozen);
+  $('cam-stop').classList.toggle('hidden', !on);
+}
+async function startCam() {
+  camMsg('');
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    camMsg('This browser blocks camera access on this page. Open the app at http://localhost:8000 or over HTTPS.'); return;
+  }
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
+    video.srcObject = stream; await video.play();
+    streak = 0; liveOn = true; camUi('live'); updateCapture(); liveTick();
+  } catch (e) {
+    const m = { NotAllowedError: 'Camera permission was denied. Allow camera access in your browser settings, then try again.',
+                NotFoundError: 'No camera was found on this device.',
+                NotReadableError: 'The camera is in use by another app. Close it and try again.' };
+    camMsg(m[e.name] || e.message);
+  }
+}
+function stopCam() {
+  liveOn = false;
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  stream = null; video.srcObject = null; streak = 0;
+  camUi('off');
+}
+function grab(maxW, quality) {
+  const vw = video.videoWidth, vh = video.videoHeight;
+  const scale = maxW ? Math.min(1, maxW / vw) : 1;
+  const c = document.createElement('canvas');
+  c.width = Math.round(vw * scale); c.height = Math.round(vh * scale);
+  c.getContext('2d').drawImage(video, 0, 0, c.width, c.height);
+  return new Promise(res => c.toBlob(res, 'image/jpeg', quality));
+}
+async function liveTick() {
+  if (!liveOn) return;
+  if (!busy && video.videoWidth) {
+    busy = true;
+    try {
+      const rep = await postFile('/quality/frame', await grab(640, 0.7), 'frame.jpg');
+      if (liveOn) updateLive(rep);
+    } catch (e) { if (liveOn) { camMsg(e.message, 'caution'); } }
+    busy = false;
+  }
+  if (liveOn) setTimeout(liveTick, 150);
+}
+function updateLive(rep) {
+  camMsg('');
+  const qa = rep.quality_analysis || {};
+  streak = rep.decision.approved ? streak + 1 : 0;
+  $('live-score').textContent = Math.round(rep.overall_quality_score);
+  $('pills').replaceChildren(...CHECKS.filter(c => qa[c.key]).map(c =>
+    h('span', { class: 'pill ' + (qa[c.key].passed ? 'ok' : 'bad') }, icon(qa[c.key].passed ? 'check' : 'x', 12), c.label)));
+  const tips = rep.decision.feedback || [];
+  $('hint').textContent = rep.decision.approved
+    ? (streak >= REQUIRED ? 'Quality looks good. You can capture now.' : 'Looks good. Hold still.')
+    : (tips[0] || rep.decision.reasons[0] || 'Adjust the camera.');
+  updateCapture();
+}
+function updateCapture() {
+  const b = $('cam-capture'), ready = streak >= REQUIRED;
+  b.disabled = !ready;
+  b.textContent = ready ? 'Capture image' : `Waiting for quality approval (${Math.min(streak, REQUIRED)}/${REQUIRED})`;
+}
+$('cam-start').onclick = startCam;
+$('cam-stop').onclick = () => { stopCam(); resultEmpty(); };
+$('cam-capture').onclick = async () => {
+  if (streak < REQUIRED) return;
+  liveOn = false;
+  const blob = await grab(0, 0.92);          // full resolution
+  $('snap').src = URL.createObjectURL(blob);
+  camUi('frozen');
+  analyze(blob, 'webcam-capture.jpg');       // final check on the exact captured image
+};
+$('cam-retake').onclick = () => {
+  streak = 0; liveOn = true; camUi('live'); updateCapture(); resultEmpty(); liveTick();
+};
+window.addEventListener('pagehide', stopCam);
+
+/* ---------- performance page ---------- */
+const METRICS = [
+  ['sensitivity', 'Sensitivity', 'Bad images correctly rejected'],
+  ['specificity', 'Specificity', 'Good images correctly approved'],
+  ['precision', 'Precision', 'Rejected images that were truly bad'],
+  ['accuracy', 'Accuracy', 'All images judged correctly'],
+  ['f1', 'F1 score', 'Balance of sensitivity and precision'],
+  ['false_approval_rate', 'False approval rate', 'Bad images wrongly approved (lower is better)'],
+  ['false_rejection_rate', 'False rejection rate', 'Good images wrongly rejected (lower is better)'],
+];
+function hbar(label, v, tone) {
+  return h('div', { class: 'hbar' }, h('span', {}, label),
+    h('div', { class: 'bar ' + tone }, h('i', { style: `width:${(v || 0) * 100}%` })),
+    h('span', { class: 'mono' }, pct(v)));
+}
+function renderPerf(m) {
+  const b = m.before_calibration, a = m.after_calibration;
+  const table = h('table', { class: 'stats' },
+    h('thead', {}, h('tr', {}, h('th', {}, 'Measure'), h('th', {}, 'Before calibration'), h('th', {}, 'After calibration'), h('th', {}, 'What it means'))),
+    h('tbody', {}, METRICS.map(([k, n, d]) => h('tr', {}, h('td', {}, n), h('td', { class: 'num' }, pct(b[k])), h('td', { class: 'num after' }, pct(a[k])), h('td', { class: 'muted' }, d)))));
+  const cm = a.confusion_matrix;
+  const matrix = h('table', { class: 'cm' },
+    h('thead', {}, h('tr', {}, h('th', {}, ''), h('th', {}, 'Rejected'), h('th', {}, 'Approved'))),
+    h('tbody', {},
+      h('tr', {}, h('th', {}, 'Bad images'), h('td', { class: 'good' }, h('b', {}, cm.true_positive), 'correct'), h('td', { class: 'badc' }, h('b', {}, cm.false_negative), 'missed')),
+      h('tr', {}, h('th', {}, 'Good images'), h('td', { class: 'badc' }, h('b', {}, cm.false_positive), 'wrongly rejected'), h('td', { class: 'good' }, h('b', {}, cm.true_negative), 'correct'))));
+  const det = Object.entries(a.detection_rate_by_defect || {}).map(([k, v]) => hbar(k, v, v >= .9 ? 'success' : 'danger'));
+  const fr = Object.entries(a.false_rejection_by_check || {}).map(([k, v]) => hbar(LABEL[k] || k, v, v > .1 ? 'danger' : 'success'));
+  return h('div', {},
+    h('div', { class: 'callout warning', style: 'margin-bottom:16px' }, h('span', { class: 'ico' }, icon('alert')), h('div', {}, h('p', {}, m.note || ''))),
+    h('div', { class: 'box' }, h('div', { class: 'box-h' }, `Evaluated on ${a.samples.good} good and ${a.samples.bad} bad images`), table),
+    h('div', { class: 'perf-grid' },
+      h('div', { class: 'box' }, h('div', { class: 'box-h' }, 'Confusion matrix (after calibration)'), h('div', { class: 'box-b' }, matrix)),
+      h('div', { class: 'box' }, h('div', { class: 'box-h' }, 'Average score'), h('div', { class: 'box-b' },
+        hbar('Good', (a.mean_overall_score_good || 0) / 100, 'success'), hbar('Bad', (a.mean_overall_score_bad || 0) / 100, 'danger'),
+        h('p', { class: 'muted' }, 'Mean overall quality score (0 to 100) for each group.'))),
+      h('div', { class: 'box' }, h('div', { class: 'box-h' }, 'Detection rate by defect'), h('div', { class: 'box-b' }, det.length ? det : h('span', { class: 'muted' }, 'No defect data.'))),
+      h('div', { class: 'box' }, h('div', { class: 'box-h' }, 'Good images wrongly rejected, by check'), h('div', { class: 'box-b' }, fr))),
+    (m.changed || []).length ? h('div', { class: 'box', style: 'margin-top:24px' }, h('div', { class: 'box-h' }, 'Thresholds changed by calibration'),
+      h('div', { class: 'box-b' }, h('pre', { style: 'margin:0' }, m.changed.join('\n')))) : null);
+}
+async function loadPerf() {
+  const box = $('perf');
+  box.replaceChildren(h('div', { class: 'empty' }, h('div', { class: 'spin' }), h('div', {}, 'Loading metrics')));
+  try {
+    const res = await fetch(API + '/metrics');
+    if (res.status === 404) {
+      box.replaceChildren(h('div', { class: 'box' }, h('div', { class: 'box-b' },
+        h('div', { class: 'callout info' }, h('span', { class: 'ico' }, icon('info')),
+          h('div', {}, h('p', { class: 't' }, 'No evaluation has been run yet'),
+            h('p', {}, 'Run this from the dermaguard folder, then reload this page:'))),
+        h('pre', {}, 'python -m model_1_quality.evaluate --good_dir data\\good --synthesize'))));
+      return;
+    }
+    if (!res.ok) throw new Error(res.statusText);
+    setApi(true);
+    box.replaceChildren(renderPerf(await res.json()));
+  } catch (e) {
+    setApi(false);
+    box.replaceChildren(h('div', { class: 'callout caution' }, h('span', { class: 'ico' }, icon('alert')),
+      h('div', {}, h('p', { class: 't' }, "Can't reach the Model 1 API"), h('p', {}, 'Start it with: uvicorn backend.main:app --reload'))));
+  }
+}
+
+pingApi();
+</script>
+</body>
+</html>
