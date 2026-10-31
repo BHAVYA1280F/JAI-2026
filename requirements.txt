@@ -1,5 +1,15 @@
+# Install PyTorch FIRST. RTX 5060 (Blackwell) needs a CUDA 12.8 build:
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
+timm>=1.0
+numpy
+pandas
+scikit-learn
+scipy
+pillow
+tqdm
+matplotlib
 fastapi
 uvicorn
-opencv-python-headless
-numpy
 python-multipart
+pydantic>=2
+opencv-python-headless

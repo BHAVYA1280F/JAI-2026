@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+*:Zone.Identifier
+outputs/*.pt
+outputs/*.npy
