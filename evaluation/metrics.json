@@ -1,0 +1,136 @@
+{
+  "before_calibration": {
+    "samples": {
+      "good": 300,
+      "bad": 1800
+    },
+    "confusion_matrix": {
+      "true_positive": 1793,
+      "false_negative": 7,
+      "true_negative": 39,
+      "false_positive": 261
+    },
+    "sensitivity": 0.9961,
+    "specificity": 0.13,
+    "precision": 0.8729,
+    "accuracy": 0.8724,
+    "f1": 0.9304,
+    "false_approval_rate": 0.0039,
+    "false_rejection_rate": 0.87,
+    "mean_overall_score_good": 76.9,
+    "mean_overall_score_bad": 65.1,
+    "detection_rate_by_defect": {
+      "blur": 1.0,
+      "bright": 1.0,
+      "dark": 1.0,
+      "glare": 1.0,
+      "hair": 0.9767,
+      "lowres": 1.0
+    },
+    "false_rejection_by_check": {
+      "clarity": 0.7933,
+      "illumination": 0.0067,
+      "glare": 0.06,
+      "obstruction": 0.0367,
+      "resolution": 0.0,
+      "framing": 0.41
+    },
+    "score_by_check": {
+      "clarity": {
+        "median_good": 34.0,
+        "median_when_defective": 0.0
+      },
+      "illumination": {
+        "median_good": 100.0,
+        "median_when_defective": 5.6
+      },
+      "glare": {
+        "median_good": 100.0,
+        "median_when_defective": 5.7
+      },
+      "obstruction": {
+        "median_good": 99.2,
+        "median_when_defective": 42.6
+      },
+      "resolution": {
+        "median_good": 100.0,
+        "median_when_defective": 7.3
+      },
+      "framing": {
+        "median_good": 100.0,
+        "median_when_defective": null
+      }
+    }
+  },
+  "after_calibration": {
+    "samples": {
+      "good": 300,
+      "bad": 1800
+    },
+    "confusion_matrix": {
+      "true_positive": 1800,
+      "false_negative": 0,
+      "true_negative": 266,
+      "false_positive": 34
+    },
+    "sensitivity": 1.0,
+    "specificity": 0.8867,
+    "precision": 0.9815,
+    "accuracy": 0.9838,
+    "f1": 0.9907,
+    "false_approval_rate": 0.0,
+    "false_rejection_rate": 0.1133,
+    "mean_overall_score_good": 93.3,
+    "mean_overall_score_bad": 73.0,
+    "detection_rate_by_defect": {
+      "blur": 1.0,
+      "bright": 1.0,
+      "dark": 1.0,
+      "glare": 1.0,
+      "hair": 1.0,
+      "lowres": 1.0
+    },
+    "false_rejection_by_check": {
+      "clarity": 0.0,
+      "illumination": 0.0067,
+      "glare": 0.06,
+      "obstruction": 0.0467,
+      "resolution": 0.0,
+      "framing": 0.41
+    },
+    "score_by_check": {
+      "clarity": {
+        "median_good": 100.0,
+        "median_when_defective": 0.0
+      },
+      "illumination": {
+        "median_good": 100.0,
+        "median_when_defective": 3.2
+      },
+      "glare": {
+        "median_good": 100.0,
+        "median_when_defective": 0.0
+      },
+      "obstruction": {
+        "median_good": 99.0,
+        "median_when_defective": 38.8
+      },
+      "resolution": {
+        "median_good": 100.0,
+        "median_when_defective": 7.3
+      },
+      "framing": {
+        "median_good": 100.0,
+        "median_when_defective": null
+      }
+    }
+  },
+  "changed": [
+    "blur anchors: worst=1.2, boundary=4.9, best=48.6",
+    "mean_hard_range=(65.6, 202.9)",
+    "glare_max_fraction=0.0106",
+    "glare_max_blob_fraction=0.01255",
+    "hair_max_fraction=0.05035"
+  ],
+  "note": "Calibrated on synthetic defects unless --bad_dir was given; validate on real, hand-labelled images before trusting these numbers."
+}

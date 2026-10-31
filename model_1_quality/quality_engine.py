@@ -1,17 +1,12 @@
-"""Model 1: Image Quality Agent (rule-based, OpenCV).
+"""Image Quality Agent (rule-based, OpenCV).
 
     engine = QualityEngine()
-    report = engine.analyze_bytes(file_bytes)   # uploaded image
-    report = engine.analyze(frame_bgr)          # webcam frame (numpy BGR array)
+    payload = engine.analyze_bytes(file_bytes)   # uploaded image
+    payload = engine.analyze(frame_bgr)          # webcam frame (numpy BGR array)
 
-Agent contract (read by the Triage Agent):
-    report["agent"]               "image_quality"
-    report["score"]               0-100 overall quality score
-    report["status"]              "PASS" | "WARN" | "FAIL"
-    report["reasons"][]           human-readable defects / warnings
-    report["defects"]             per-defect severity (blur, glare, low_illumination, ...)
-    report["confidence_modifier"] 0.0-1.0, multiply the diagnosis confidence by this
-    report["recommended_action"]  "PROCEED" | "PROCEED_WITH_CAUTION" | "RE_IMAGE"
+Agent payload (agent contract): agent, score (0-100), severity (PASS|WARN|FAIL),
+reasons[], defects[], quality_factor (0-1). Detail fields used by the UI
+(quality_analysis, decision, recommendations, ...) are kept alongside.
 """
 import cv2
 import numpy as np
@@ -43,23 +38,25 @@ def grade(score):
             else "POOR" if score >= 60 else "VERY_POOR")
 
 
+def defect_type(key, result, cfg):
+    """Machine-readable defect name, so downstream agents can cite the exact problem."""
+    if key == "illumination":
+        mean = result["metrics"]["mean_gray"]
+        return "low_illumination" if mean < sum(cfg.mean_ok_range) / 2 else "overexposure"
+    return {"clarity": "blur", "glare": "glare", "obstruction": "hair_obstruction",
+            "resolution": "low_resolution", "framing": "poor_framing"}[key]
+
+
 class QualityEngine:
     def __init__(self, config: QualityConfig | None = None):
         self.cfg = config or QualityConfig()
 
-    # ------------------------------------------------------------------ input
     def analyze_bytes(self, data: bytes, image_id: str = "IMG"):
         img = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
         if img is None:
             return self._invalid(image_id, "File is not a readable image")
         return self.analyze(img, image_id)
 
-    def _severity(self, key, r):
-        if not r["passed"]:
-            return "FAIL" if key in self.cfg.critical else "WARN"
-        return "WARN" if r["score"] < self.cfg.warn_score else "PASS"
-
-    # --------------------------------------------------------------- analysis
     def analyze(self, bgr: np.ndarray, image_id: str = "IMG"):
         if bgr is None or bgr.ndim != 3 or bgr.shape[2] != 3 or bgr.size == 0:
             return self._invalid(image_id, "Image must be a 3-channel colour image")
@@ -78,69 +75,61 @@ class QualityEngine:
             "resolution": checks.check_resolution(oh, ow, cfg),
             "framing": checks.check_framing(small, cfg),
         }
-        for k, r in results.items():
-            r["severity"] = self._severity(k, r)
 
         overall = sum(cfg.weights[k] * results[k]["score"] for k in results)
-        failed = [k for k, r in results.items() if r["severity"] == "FAIL"]
-        warned = [k for k, r in results.items() if r["severity"] == "WARN"]
+        failed = [k for k in cfg.critical if not results[k]["passed"]]   # can reject on their own
         approved = overall >= cfg.approve_threshold and not failed
 
-        reasons = [results[k]["reason"] for k in failed]
+        decision_reasons = [results[k]["reason"] for k in failed]
         if not failed and not approved:
-            reasons.append(f"Overall quality {overall:.0f} is below {cfg.approve_threshold:.0f}")
-        warnings = [results[k]["reason"] if not results[k]["passed"] else SOFT_TIPS[k] for k in warned]
+            decision_reasons.append(f"Overall quality {overall:.0f} is below {cfg.approve_threshold:.0f}")
 
-        status = "FAIL" if not approved else ("WARN" if warned else "PASS")
+        # ---- defects (every problem found, FAIL ones first) ----
+        defects = []
+        for k, r in results.items():
+            if not r["passed"]:
+                sev, detail = ("FAIL" if k in cfg.critical else "WARN"), r["reason"]
+            elif r["score"] < cfg.warn_score:
+                sev, detail = "WARN", f"{k} score is {r['score']:.0f}/100"
+            else:
+                continue
+            defects.append({"type": defect_type(k, r, cfg), "check": k, "severity": sev,
+                            "score": r["score"], "detail": detail})
+        defects.sort(key=lambda d: d["severity"] != "FAIL")
 
+        severity = "FAIL" if not approved else ("WARN" if defects else "PASS")
+        reasons = [d["detail"] for d in defects]
+        if not failed and not approved:
+            reasons.append(decision_reasons[-1])
+
+        # ---- recommendations ----
         recommendations = []
         for k, r in results.items():
-            if r["severity"] == "FAIL":
+            if not r["passed"] and k in cfg.critical:
                 recommendations.append({"check": k, "severity": "MUST_FIX",
                                         "problem": r["reason"], "action": FEEDBACK[k]})
-            elif r["severity"] == "WARN":
-                if not r["passed"]:
-                    recommendations.append({"check": k, "severity": "SUGGESTED",
-                                            "problem": r["reason"], "action": FEEDBACK[k]})
-                else:
-                    recommendations.append({"check": k, "severity": "SUGGESTED",
-                                            "problem": f"{k} score is {r['score']:.0f}/100",
-                                            "action": SOFT_TIPS[k]})
+            elif not r["passed"]:
+                recommendations.append({"check": k, "severity": "SUGGESTED",
+                                        "problem": r["reason"], "action": FEEDBACK[k]})
+            elif r["score"] < cfg.warn_score:
+                recommendations.append({"check": k, "severity": "SUGGESTED",
+                                        "problem": f"{k} score is {r['score']:.0f}/100",
+                                        "action": SOFT_TIPS[k]})
         if not recommendations:
             recommendations.append({"check": "overall", "severity": "INFO", "problem": "",
                                     "action": "Image quality is good; no changes needed"})
 
-        # Quality actively modulates diagnosis confidence downstream.
-        if approved:
-            modifier = round(min(1.0, overall / cfg.full_confidence_score), 3)
-        else:
-            modifier = 0.0
-        action = "RE_IMAGE" if not approved else ("PROCEED_WITH_CAUTION" if warned else "PROCEED")
-
-        under = results["illumination"]["metrics"].get("underexposed", 0.0) > 0.5
-        ill_sev = results["illumination"]["severity"]
-        defects = {
-            "blur": results["clarity"]["severity"],
-            "glare": results["glare"]["severity"],
-            "low_illumination": ill_sev if under else "PASS",
-            "overexposure": "PASS" if under else ill_sev,
-            "hair_obstruction": results["obstruction"]["severity"],
-            "low_resolution": results["resolution"]["severity"],
-            "framing": results["framing"]["severity"],
-        }
-
         return {
-            # --- agent contract ---
+            # ---- agent contract ----
             "agent": "image_quality",
+            "score": round(overall, 1),
+            "severity": severity,
+            "reasons": reasons,
+            "defects": defects,
+            "quality_factor": round(overall / 100, 3),
+            # ---- detail ----
             "model": "ImageQualityAgent",
             "image_id": image_id,
-            "score": round(overall, 1),
-            "status": status,
-            "reasons": reasons + warnings,
-            "defects": defects,
-            "confidence_modifier": modifier,
-            "recommended_action": action,
-            # --- detail ---
             "quality_analysis": results,
             "overall_quality_score": round(overall, 1),
             "quality_grade": grade(overall),
@@ -148,25 +137,24 @@ class QualityEngine:
             "decision": {
                 "approved": approved,
                 "status": "APPROVED" if approved else "REJECTED",
-                "reasons": reasons,
-                "warnings": warnings,
+                "reasons": decision_reasons,
                 "feedback": [FEEDBACK[k] for k in failed],
             },
             "next_step": "SEND_TO_MODEL_2" if approved else "REQUEST_NEW_IMAGE",
         }
 
     def _invalid(self, image_id, reason):
-        return {
-            "agent": "image_quality", "model": "ImageQualityAgent", "image_id": image_id,
-            "score": 0.0, "status": "FAIL", "reasons": [reason], "defects": {},
-            "confidence_modifier": 0.0, "recommended_action": "RE_IMAGE",
-            "quality_analysis": {}, "overall_quality_score": 0.0, "quality_grade": "VERY_POOR",
-            "recommendations": [{"check": "input", "severity": "MUST_FIX", "problem": reason,
-                                 "action": "Upload a valid JPG or PNG image"}],
-            "decision": {"approved": False, "status": "REJECTED", "reasons": [reason],
-                         "warnings": [], "feedback": ["Upload a valid JPG or PNG image"]},
-            "next_step": "REQUEST_NEW_IMAGE",
-        }
+        return {"agent": "image_quality", "score": 0.0, "severity": "FAIL", "reasons": [reason],
+                "defects": [{"type": "invalid_image", "check": "input", "severity": "FAIL",
+                             "score": 0.0, "detail": reason}],
+                "quality_factor": 0.0,
+                "model": "ImageQualityAgent", "image_id": image_id, "quality_analysis": {},
+                "overall_quality_score": 0.0, "quality_grade": "VERY_POOR",
+                "recommendations": [{"check": "input", "severity": "MUST_FIX", "problem": reason,
+                                     "action": "Upload a valid JPG or PNG image"}],
+                "decision": {"approved": False, "status": "REJECTED",
+                             "reasons": [reason], "feedback": ["Upload a valid JPG or PNG image"]},
+                "next_step": "REQUEST_NEW_IMAGE"}
 
 
 class StabilityTracker:
