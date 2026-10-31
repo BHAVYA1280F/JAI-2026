@@ -1,0 +1,30 @@
+test_id,age,sex,localization,predicted_class,expected_risk_score,expected_risk_level,expected_context_reliability,expected_missing_fields,expected_context_flags,what_it_tests
+T01,75,male,back,mel,0.79,HIGH,1.0,,,"Elderly male, high-risk site, malignant label: consistent, no flags"
+T02,75,male,back,nv,0.79,HIGH,1.0,,benign_label_in_high_risk_context,Benign label in HIGH context (age>=70 branch)
+T03,25,female,abdomen,nv,0.2625,LOW,1.0,,,"Young, low-risk site, benign label: consistent"
+T04,25,female,abdomen,mel,0.2625,LOW,1.0,,malignant_label_in_low_risk_context,Malignant label in LOW context
+T05,22,female,abdomen,bcc,0.24,LOW,1.0,,atypical_for_age:bcc;malignant_label_in_low_risk_context,BCC under 30 plus LOW context: two flags
+T06,10,male,trunk,mel,0.265,LOW,1.0,,atypical_for_age:mel;malignant_label_in_low_risk_context,Melanoma under 15
+T07,28,male,face,akiec,0.385,MEDIUM,1.0,,atypical_for_age:akiec,AKIEC under 30 in MEDIUM context: only age flag
+T08,50,female,foot,bkl,0.54,MEDIUM,1.0,,,"Mid-range MEDIUM, benign label: no flags"
+T09,60,male,hand,bcc,0.64,HIGH,1.0,,,"HIGH, malignant label: no flags"
+T10,62,,back,nv,0.6867,HIGH,0.667,sex,benign_label_in_high_risk_context,"Missing sex: weights renormalised, reliability 0.667; nv+HIGH flag via second block (age<70)"
+T11,,,,nv,,UNKNOWN,0.0,age;sex;location,,"All fields missing: no risk score, no flags"
+T12,nan,unknown,unknown,mel,,UNKNOWN,0.0,age;sex;location,,Missing-value strings (nan/unknown) treated as missing
+T13,-5,female,back,mel,0.5625,MEDIUM,0.667,age,,"Negative age is invalid, treated as missing"
+T14,150,male,face,nv,0.6625,HIGH,0.667,age,benign_label_in_high_risk_context,Age >120 invalid; nv+HIGH flag via second block
+T15,45,male,elbow,nv,0.4536,MEDIUM,1.0,location_unrecognised,,Unrecognised site: excluded from score; reliability stays 1.0 (known quirk)
+T16,40,unknown,back,mel,0.4333,MEDIUM,0.667,sex,,Sex 'unknown' counts as missing
+T17,60,  Male ,BACK,nv,0.655,HIGH,1.0,,benign_label_in_high_risk_context,Whitespace and case normalisation
+T18,60,female,lower extremity,mel,0.615,HIGH,1.0,,,Multi-word HAM10000 location recognised
+T19,55,male,chest,,0.5575,MEDIUM,1.0,,,No predicted_class: no plausibility flags
+T20,30,female,abdomen,bcc,0.3,LOW,1.0,,malignant_label_in_low_risk_context,Boundary: age exactly 30 is NOT atypical for bcc
+T21,15,male,scalp,mel,0.31,LOW,1.0,,malignant_label_in_low_risk_context,Boundary: age exactly 15 is NOT atypical for mel
+T22,85,male,scalp,nv,0.865,HIGH,1.0,,benign_label_in_high_risk_context,Age above curve range clamps to 1.0
+T23,80,female,neck,mel,0.84,HIGH,1.0,,,"Elderly, chronic-sun site, malignant: consistent"
+T24,,male,,nv,0.55,MEDIUM,0.333,age;location,,Only sex present: reliability 0.333
+T25,,,face,nv,0.7,HIGH,0.333,age;sex,benign_label_in_high_risk_context,Only location present; nv+HIGH flag
+T26,80,male,back,NV,0.835,HIGH,1.0,,benign_label_in_high_risk_context,Uppercase predicted_class normalised
+T27,70,female,ear,unknown,0.765,HIGH,1.0,,,predicted_class 'unknown' treated as missing
+T28,70,male,trunk,nv,0.745,HIGH,1.0,,benign_label_in_high_risk_context,"Age 70 boundary: flag appears once, not duplicated"
+T29,20,female,upper extremity,akiec,0.24,LOW,1.0,,atypical_for_age:akiec;malignant_label_in_low_risk_context,Young AKIEC in LOW context: two flags
