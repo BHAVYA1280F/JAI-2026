@@ -102,6 +102,8 @@ def _entropy(probs: list[float]) -> float:
 def _truthy_reliable(v) -> bool:
     if v is None:
         return True
+    if isinstance(v, (int, float)) and not isinstance(v, bool):
+        return float(v) >= 0.5  # A3 reports reliability as a 0-1 number
     if isinstance(v, str):
         return v.strip().lower() not in {"low", "unreliable", "false", "no", "poor"}
     return bool(v)
@@ -147,25 +149,31 @@ def safety_audit(
     is_mal = label in MALIGNANT
 
     # ---- A1: quality
-    status = str(_g(a1, "status", "verdict", default="PASS")).upper()
-    q_score = _g(a1, "score", "usability_score")
-    a1_failed = status in {"FAIL", "FAILED", "POOR", "BAD", "REJECT", "RE_IMAGE", "RE-IMAGE"}
+    status = str(_g(a1, "severity", "status", "verdict", default="PASS")).upper()
+    q_score = _g(a1, "quality_factor")           # A1 repo: 0-1
+    if q_score is None:
+        q_score = _g(a1, "usability_score", "score")
+        if q_score is not None and float(q_score) > 1.0:
+            q_score = float(q_score) / 100.0     # A1 'score' is 0-100
+    a1_failed = status in {"FAIL", "FAILED", "POOR", "BAD", "REJECT", "REJECTED", "RE_IMAGE", "RE-IMAGE"}
 
     # ---- A3: lesion evidence
     susp = _g(a3, "suspicion", "suspicion_score")
     a3_reliable = _truthy_reliable(_g(a3, "reliable", "reliability"))
 
     # ---- A4: context
-    age = _g(a4, "age")
-    sex = _g(a4, "sex", "gender")
-    site = _g(a4, "site", "localization", "location")
+    used = _g(a4, "used", default={}) or {}      # A4 repo nests age/sex/location in "used"
+    age = _g(a4, "age", default=used.get("age"))
+    sex = _g(a4, "sex", "gender", default=used.get("sex"))
+    site = _g(a4, "site", "localization", "location", default=used.get("location"))
     missing = _g(a4, "missing", "missing_fields")
     if missing is None:
         missing = [n for n, v in (("age", age), ("sex", sex), ("site", site)) if _is_missing(v)]
+    missing = [m for m in missing if m != "location_unrecognised"]
     n_missing = len(missing)
     risk = _g(a4, "risk_level", "risk_indicator", "risk")
     if risk is not None:
-        risk_high = str(risk).lower() in {"high", "elevated"}
+        risk_high = str(risk).lower() in {"high", "elevated"}  # UNKNOWN/MEDIUM/LOW -> not high
     else:  # fallback computed from age / site
         age_high = (not _is_missing(age)) and float(age) >= cfg["high_age"]
         site_high = (not _is_missing(site)) and str(site).lower() in HIGH_RISK_SITES
