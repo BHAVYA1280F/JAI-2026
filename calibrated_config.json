@@ -1,0 +1,52 @@
+{
+  "analysis_size": 640,
+  "blur_worst_var": 1.2,
+  "blur_min_var": 4.9,
+  "blur_good_var": 48.6,
+  "mean_ok_range": [
+    95.6,
+    172.9
+  ],
+  "mean_hard_range": [
+    65.6,
+    202.9
+  ],
+  "mean_worst": [
+    20,
+    245
+  ],
+  "max_clipped_fraction": 0.15,
+  "clipped_worst": 0.5,
+  "glare_v_min": 240,
+  "glare_s_max": 50,
+  "glare_max_fraction": 0.0106,
+  "glare_max_blob_fraction": 0.01255,
+  "hair_max_fraction": 0.05035,
+  "ratio_worst": 5.0,
+  "min_side_px": 224,
+  "good_side_px": 450,
+  "worst_side_px": 112,
+  "lesion_area_range": [
+    0.05,
+    0.85
+  ],
+  "border_margin": 0.01,
+  "centre_tolerance": 0.3,
+  "weights": {
+    "clarity": 0.3,
+    "illumination": 0.2,
+    "glare": 0.15,
+    "obstruction": 0.15,
+    "resolution": 0.1,
+    "framing": 0.1
+  },
+  "approve_threshold": 80.0,
+  "warn_score": 75.0,
+  "critical": [
+    "clarity",
+    "illumination",
+    "glare",
+    "obstruction",
+    "resolution"
+  ]
+}
